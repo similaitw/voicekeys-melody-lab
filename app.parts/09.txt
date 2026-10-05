@@ -1,0 +1,42 @@
+ce.textContent=`${Math.round(notes.reduce((s,n)=>s+n.confidence,0)/notes.length*100)}%`;
+  } else { els.noteRange.textContent='未偵測'; els.confidence.textContent='—'; }
+  els.durationMetric.textContent=`${elapsed.toFixed(1)} 秒`;
+  els.midiBtn.disabled=!notes.length;
+  els.restartBtn.disabled=!notes.length;
+  els.playBtn.disabled=!notes.length;
+  els.seek.disabled=!notes.length;
+  els.seek.max=state.duration;
+  els.playerHeading.textContent=notes.length?'旋律已就緒':'沒有找到穩定旋律';
+  els.playerSub.textContent=notes.length?`${notes.length} 個音符 · ${formatTime(state.duration)}`:'可調整音域或改用純人聲音檔再試';
+  state.scorePage=0;
+  computeScorePages();
+  renderScore();
+  drawFalling(0); drawPiano();
+}
+
+function drawWaveform(buffer) {
+  const c=els.waveform, ctx=c.getContext('2d');
+  const w=c.width,h=c.height; ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#11110f';ctx.fillRect(0,0,w,h);
+  const data=buffer.getChannelData(0); const step=Math.max(1,Math.floor(data.length/w));
+  ctx.strokeStyle='#8e856f';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<w;x++){let min=1,max=-1;const start=x*step,end=Math.min(data.length,start+step);for(let i=start;i<end;i+=Math.max(1,Math.floor(step/24))){const v=data[i];if(v<min)min=v;if(v>max)max=v;}ctx.moveTo(x,(1+min)*h/2);ctx.lineTo(x,(1+max)*h/2);}ctx.stroke();
+  ctx.strokeStyle='#c8a76a';ctx.globalAlpha=.8;ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();ctx.globalAlpha=1;
+}
+
+function drawFalling(time) {
+  const c=els.fallingCanvas, ctx=c.getContext('2d'); const w=c.width,h=c.height;
+  ctx.fillStyle='#141412';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#27261f';ctx.lineWidth=1;for(let i=0;i<=36;i++){const x=i*w/36;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  const look=4.5, minMidi=48,maxMidi=84;
+  for(const n of state.notes){const rel=n.start-time;if(rel>look||n.start+n.duration<time-.2)continue;const x=(n.midi-minMidi)/(maxMidi-minMidi)*w;const nw=Math.max(8,w/(maxMidi-minMidi)*.7);const y=h-rel/look*h;const nh=Math.max(8,n.duration/look*h);ctx.fillStyle=`rgba(226,197,142,${.35+.6*n.confidence})`;ctx.fillRect(x-nw/2,y-nh,nw,nh);}
+  ctx.strokeStyle='#e4c58e';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,h-3);ctx.lineTo(w,h-3);ctx.stroke();
+}
+
+function buildPianoLayout() {
+  const w=els.pianoCanvas.width,h=els.pianoCanvas.height,min=48,max=84;
+  const white=[];for(let m=min;m<=max;m++)if(!isBlackPc(m%12))white.push(m);
+  const ww=w/white.length; const layout=[];
+  white.forEach((m,i)=>layout.push({midi:m,x:i*ww,width:ww,height:h,color:'white'}));
+  for(let m=min;m<=max;m++)if(isBlackPc(m%12)){
+    const prevWhite=whit

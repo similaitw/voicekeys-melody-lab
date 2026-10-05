@@ -1,0 +1,75 @@
+
+        state.vocalUrl = URL.createObjectURL(audioBufferToWavBlob(targetBuffer));
+        els.vocalAudio.src = state.vocalUrl;
+      }
+    } else {
+      setStage('separate', '純人聲模式：跳過人聲分離。', 100);
+      state.vocalBuffer = state.originalBuffer;
+      els.vocalAudio.src = state.fileUrl;
+      await sleep(140);
+    }
+    checkAbort();
+
+    setStage('gate', '分析音量，找出有效聲音區段…', 0);
+    const pitchResult = await trackPitch(targetBuffer);
+    checkAbort();
+    state.pitchFrames = pitchResult.frames;
+
+    setStage('smooth', '修正短暫跳音並切分音符…', 25);
+    await sleep(20);
+    state.notes = segmentNotes(state.pitchFrames, pitchResult.hopSeconds);
+    checkAbort();
+    setStage('smooth', '量化旋律並合併過短音符…', 80);
+    state.notes = cleanupNotes(state.notes);
+    await sleep(10);
+
+    setStage('ready', '建立鋼琴、動畫與樂譜…', 90);
+    finalizeAnalysis();
+    finishPipeline();
+    const suffix = state.warning ? ` ${state.warning}` : '';
+    setStatus(`完成：找到 ${state.notes.length} 個旋律音符。${suffix}`, 100);
+  } catch (err) {
+    if (String(err?.message) === '__ABORT__') {
+      setStatus('已取消分析。', 0);
+      resetPipeline();
+    } else {
+      console.error(err);
+      setStatus(`分析失敗：${err?.message || err}`, 0);
+    }
+  } finally {
+    setAnalyzing(false);
+    els.cancelBtn.disabled = false;
+  }
+}
+
+async function separateVocals(objectUrl) {
+  checkAbort();
+  setStage('separate', '首次使用會下載約 67 MB 人聲模型…', 4);
+  let mod;
+  try {
+    mod = await import('web-audio-separation');
+  } catch (localImportError) {
+    console.warn('Local package unavailable; trying CDN bundle.', localImportError);
+    mod = await import('https://esm.sh/web-audio-separation@0.3.1?bundle&deps=onnxruntime-web@1.29.0');
+  }
+  checkAbort();
+  const separator = mod.createSeparator('UVR-MDX-NET-Voc_FT', {
+    common: {
+      logLevel: 'warning',
+      outputSingleStem: 'vocals',
+      onProgress: (p) => {
+        const f = clamp((p.fraction || 0) * 100, 0, 100);
+        if (p.stage === 'loading-model') setStage('separate', '載入人聲模型…', 5 + f * .2);
+        else if (p.stage === 'demixing') setStage('separate', `分離人聲${p.totalChunks ? ` · ${p.chunk || 0}/${p.totalChunks}` : ''}…`, 25 + f * .65);
+        else if (p.stage === 'writing-output') setStage('separate', '整理人聲音軌…', 90 + f * .1);
+      }
+    },
+    mdx: { executionProviders: ['webgpu','wasm'], overlap: 0.25, batchSize: 1 }
+  });
+  await separator.loadModel();
+  checkAbort();
+  const urls = await separator.separate(objectUrl);
+  checkAbort();
+  if (!urls?.length) throw new Error('人聲分離沒有產生輸出');
+  const vocalUrl = urls[0];
+  const ab = await fetch(vocalUrl).then(r => r.arrayBuf

@@ -1,0 +1,36 @@
+ {
+  state.mode=mode;document.querySelectorAll('.mode').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));configureAudioMode();
+  if(!els.originalAudio.paused){
+    if(mode==='vocal' && els.vocalAudio.src){els.vocalAudio.currentTime=els.originalAudio.currentTime;els.vocalAudio.playbackRate=els.originalAudio.playbackRate;els.vocalAudio.play().catch(()=>{});}else els.vocalAudio.pause();
+  }
+}
+document.querySelectorAll('.mode').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+els.volume.addEventListener('input',configureAudioMode);
+els.speedSelect.addEventListener('change',()=>{const r=Number(els.speedSelect.value);els.originalAudio.playbackRate=r;els.vocalAudio.playbackRate=r;});
+
+async function playPlayer() {
+  if(!state.notes.length)return;
+  const ctx=getAudioContext();if(ctx.state==='suspended')await ctx.resume();
+  configureAudioMode();const rate=Number(els.speedSelect.value);els.originalAudio.playbackRate=rate;els.vocalAudio.playbackRate=rate;
+  const t=Number(els.seek.value)||0;els.originalAudio.currentTime=t;
+  if(state.mode==='vocal' && els.vocalAudio.src){els.vocalAudio.currentTime=t;els.vocalAudio.play().catch(()=>{});}else els.vocalAudio.pause();
+  await els.originalAudio.play();state.lastPlayerTime=t-.05;els.playBtn.textContent='❚❚';cancelAnimationFrame(state.raf);state.raf=requestAnimationFrame(playerTick);
+}
+function pausePlayer(){els.originalAudio.pause();els.vocalAudio.pause();stopSynths();cancelAnimationFrame(state.raf);if(els.playBtn)els.playBtn.textContent='▶';}
+els.playBtn.addEventListener('click',()=>els.originalAudio.paused?playPlayer():pausePlayer());
+els.restartBtn.addEventListener('click',()=>{pausePlayer();seekTo(0);playPlayer();});
+els.originalAudio.addEventListener('ended',()=>{pausePlayer();seekTo(0);});
+function seekTo(t){t=clamp(t,0,state.duration||0);els.originalAudio.currentTime=t;if(els.vocalAudio.src)try{els.vocalAudio.currentTime=t;}catch{}els.seek.value=t;state.lastPlayerTime=t-.05;updatePlayerVisuals(t);}
+els.seek.addEventListener('input',()=>seekTo(Number(els.seek.value)));
+
+function playerTick(){
+  const t=els.originalAudio.currentTime;const rate=Number(els.speedSelect.value);
+  els.seek.value=t;updatePlayerVisuals(t);
+  if(state.mode==='piano'||state.mode==='ensemble'){
+    for(const n of state.notes){if(n.start>state.lastPlayerTime+.005&&n.start<=t+.04){playSynth(n.midi,Math.max(.08,n.duration/rate),Number(els.volume.value));}}
+  }
+  state.lastPlayerTime=t;
+  if(!els.originalAudio.paused)state.raf=requestAnimationFrame(playerTick);
+}
+function updatePlayerVisuals(t){
+  els.timeLabel

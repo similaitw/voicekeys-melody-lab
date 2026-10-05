@@ -1,0 +1,66 @@
+sabled = false;
+    if (isSample) els.contentSelect.value = 'solo';
+    updateAnalyzeButton();
+    resetAnalysisUI();
+    drawWaveform(buffer);
+    drawPiano();
+    setStatus('歌曲已就緒，開始尋找旋律。', 0);
+  } catch (err) {
+    console.error(err);
+    alert('瀏覽器無法解碼這個音訊檔。若是 M4A，請改用 Chrome / Edge 或轉成 MP3/WAV。');
+  }
+}
+
+function resetAnalysisUI() {
+  resetPipeline();
+  els.noteCount.textContent = '—';
+  els.noteRange.textContent = '—';
+  els.confidence.textContent = '—';
+  els.durationMetric.textContent = '—';
+  els.midiBtn.disabled = true;
+  els.restartBtn.disabled = true;
+  els.playBtn.disabled = true;
+  els.seek.disabled = true;
+  els.seek.value = 0;
+  els.seek.max = state.duration || 1;
+  els.playerHeading.textContent = '等待你的第一段旋律';
+  els.playerSub.textContent = state.file ? `已載入 ${formatTime(state.duration)}` : '尚未分析';
+  els.timeLabel.textContent = `0:00 / ${formatTime(state.duration || 0)}`;
+  els.scoreSvg.innerHTML = '';
+  els.scoreEmpty.style.display = 'grid';
+  els.pageLabel.textContent = '尚無樂譜';
+  els.prevPage.disabled = true;
+  els.nextPage.disabled = true;
+  drawFalling(0);
+}
+
+function updateAnalyzeButton() {
+  els.analyzeBtnText.textContent = els.contentSelect.value === 'song' ? '分離人聲並辨識' : '直接辨識旋律';
+}
+
+els.dropZone.addEventListener('click', () => els.fileInput.click());
+els.dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); els.fileInput.click(); } });
+els.fileInput.addEventListener('change', () => acceptFile(els.fileInput.files?.[0]));
+['dragenter','dragover'].forEach(type => els.dropZone.addEventListener(type, e => { e.preventDefault(); els.dropZone.classList.add('drag'); }));
+['dragleave','drop'].forEach(type => els.dropZone.addEventListener(type, e => { e.preventDefault(); els.dropZone.classList.remove('drag'); }));
+els.dropZone.addEventListener('drop', e => acceptFile(e.dataTransfer?.files?.[0]));
+els.contentSelect.addEventListener('change', updateAnalyzeButton);
+
+els.sampleBtn.addEventListener('click', async () => {
+  const sample = createDemoWav();
+  await acceptFile(sample, {isSample:true});
+});
+
+function createDemoWav() {
+  const sr = 44100;
+  const melody = [
+    [60,.65],[64,.65],[67,.65],[69,.65],[67,.9],[64,.55],[62,.55],[60,1.1],
+    [64,.55],[65,.55],[67,.9],[72,.7],[69,.7],[67,.7],[64,1.05]
+  ];
+  const gap = .06;
+  const total = melody.reduce((s,[,d]) => s + d + gap, 0) + .4;
+  const data = new Float32Array(Math.ceil(total * sr));
+  let t0 = .15;
+  for (const [midi,dur] of melody) {
+    const f = midiToFreq(midi);
+    const start = Math.floor(t0 * sr), end = Math.min(data.length, M

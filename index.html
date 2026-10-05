@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#11110f" />
+  <meta name="description" content="把歌聲轉成可播放、可視覺化、可匯出的鋼琴旋律。音訊在瀏覽器本機處理。" />
+  <title>VoiceKeys — 聲音轉旋律工作室</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="VoiceKeys 首頁">
+      <span class="brand-mark">◆</span>
+      <span>VoiceKeys</span><small>MELODY LAB</small>
+    </a>
+    <div class="privacy-pill"><span class="pulse"></span> 音訊只在你的瀏覽器處理</div>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <p class="eyebrow">FROM VOICE TO KEYS</p>
+      <h1>把歌聲，<em>變成琴聲。</em></h1>
+      <p class="hero-copy">上傳歌曲 → 分離人聲 → 追蹤旋律 → 生成鋼琴、動畫琴鍵、五線譜與簡譜。</p>
+      <div class="hero-rule"><span>01</span></div>
+    </section>
+
+    <section class="shell section-grid source-section" aria-labelledby="sourceTitle">
+      <div class="section-index">01</div>
+      <div>
+        <div class="section-heading">
+          <p>你的旋律工作室</p>
+          <h2 id="sourceTitle">歌曲來源</h2>
+        </div>
+
+        <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="選擇或拖曳音訊檔案">
+          <input id="fileInput" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,.mp3,.wav,.m4a" hidden />
+          <div class="drop-plus">＋</div>
+          <div>
+            <strong id="dropTitle">放入一首你喜歡的歌</strong>
+            <p id="dropHint">拖曳檔案，或點擊選擇</p>
+            <small>MP3 · WAV · M4A · 最長 10 分鐘 / 50 MB</small>
+          </div>
+        </div>
+
+        <div class="sample-row">
+          <span>或使用範例旋律</span>
+          <button id="sampleBtn" class="sample-card" type="button">
+            <span class="music-dot">♫</span>
+            <span><b>VoiceKeys Demo</b><small>瀏覽器即時合成 · 約 14 秒</small></span>
+            <span>▷</span>
+          </button>
+        </div>
+
+        <div class="options-grid">
+          <label>辨識音域
+            <select id="rangeSelect">
+              <option value="auto">自動（建議）</option>
+              <option value="low">低音人聲 E2–E4</option>
+              <option value="mid">中音人聲 A2–A5</option>
+              <option value="high">高音人聲 E3–C6</option>
+              <option value="wide">寬廣音域 C2–C7</option>
+            </select>
+          </label>
+          <label>音訊內容
+            <select id="contentSelect">
+              <option value="song">完整歌曲（先分離人聲）</option>
+              <option value="solo">純人聲 / 單旋律（直接辨識）</option>
+            </select>
+          </label>
+        </div>
+
+        <p class="model-note">首次完整歌曲分析會下載約 67 MB 的人聲分離模型並快取在瀏覽器；歌曲本身不會上傳。電腦版 Chrome / Edge 效能最佳。</p>
+
+        <button id="analyzeBtn" class="primary-btn" type="button" disabled>
+          <span>✦</span><span id="analyzeBtnText">分離人聲並辨識</span>
+        </button>
+        <button id="cancelBtn" class="ghost-btn hidden" type="button">取消</button>
+
+        <div id="statusBox" class="status-box" aria-live="polite">
+          <div class="status-line"><span id="statusText">選擇歌曲，開始尋找旋律。</span><b id="statusPct"></b></div>
+          <div class="progress"><i id="progressBar"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shell analysis-section" aria-labelledby="analysisTitle">
+      <div class="analysis-header">
+        <div><span class="section-index inline">02</span><p>旋律解析</p><h2 id="analysisTitle">旋律解析</h2></div>
+        <button id="midiBtn" class="outline-btn" type="button" disabled>↓ 匯出 MIDI 旋律</button>
+      </div>
+      <div class="metrics">
+        <article><small>辨識音符</small><strong id="noteCount">—</strong></article>
+        <article><small>旋律音域</small><strong id="noteRange">—</strong></article>
+        <article><small>平均信心</small><strong id="confidence">—</strong></article>
+        <article><small>分析時間</small><strong id="durationMetric">—</strong></article>
+      </div>
+      <div class="pipeline">
+        <span data-stage="separate">1 人聲分離</span>
+        <span data-stage="gate">2 有聲區段篩選</span>
+        <span data-stage="pitch">3 音高追蹤</span>
+        <span data-stage="smooth">4 跳音修正與切分</span>
+        <span data-stage="ready">5 鋼琴旋律</span>
+      </div>
+      <p class="info-callout">ⓘ 旋律辨識屬於自動估計。和聲、殘留伴奏、滑音與強烈殘響都可能造成誤判；較淡的音符代表音高穩定度較低。</p>
+    </section>
+
+    <section class="player-wrap">
+      <div class="shell player-shell">
+        <div class="player-title"><p>PIANO PLAYER</p><h2 id="playerHeading">等待你的第一段旋律</h2><small id="playerSub">尚未分析</small></div>
+        <canvas id="waveform" width="1200" height="140" aria-label="音訊波形"></canvas>
+        <div class="transport">
+          <button id="restartBtn" class="circle-btn" type="button" disabled>↺</button>
+          <button id="playBtn" class="play-btn" type="button" disabled>▶</button>
+          <span id="timeLabel">0:00 / 0:00</span>
+          <input id="seek" type="range" min="0" max="1" step="0.001" value="0" disabled aria-label="播放位置" />
+        </div>
+        <div class="transport-options">
+          <label>速度
+            <select id="speedSelect">
+              <option value="0.5">0.5×</option>
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1.0×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+            </select>
+          </label>
+          <div class="mode-group" aria-label="播放模式">
+            <span>播放模式</span>
+            <button data-mode="piano" class="mode active" type="button">鋼琴</button>
+            <button data-mode="original" class="mode" type="button">原曲</button>
+            <button data-mode="vocal" class="mode" type="button">人聲</button>
+            <button data-mode="ensemble" class="mode" type="button">合奏</button>
+          </div>
+          <label class="volume-label">音量 <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" /></label>
+        </div>
+
+        <div class="piano-stage">
+          <div class="piano-caption"><span>旋律音符 / 下落至琴鍵時彈奏</span><b id="currentNote">—</b></div>
+          <canvas id="fallingCanvas" width="1200" height="360"></canvas>
+          <canvas id="pianoCanvas" width="1200" height="150" aria-label="可點擊鋼琴鍵盤"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="shell score-section" aria-labelledby="scoreTitle">
+      <div class="score-copy">
+        <p class="eyebrow">MELODY SCORE</p>
+        <h2 id="scoreTitle">看見旋律的流動</h2>
+        <p>辨識完成後，可在五線譜與簡譜之間切換。點擊音符會移動播放位置。</p>
+      </div>
+      <div class="score-toolbar">
+        <div class="segmented"><button class="score-mode active" data-score="staff" type="button">五線譜</button><button class="score-mode" data-score="number" type="button">簡譜</button></div>
+        <label>記譜速度 <input id="bpm" type="number" min="40" max="220" value="90" /> BPM</label>
+        <label>簡譜 1 =
+          <select id="keySelect"><option>C</option><option>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option></select>
+        </label>
+        <label class="check"><input id="followScore" type="checkbox" checked /> 跟隨播放翻頁</label>
+      </div>
+      <div id="scoreViewport" class="score-viewport">
+        <svg id="scoreSvg" viewBox="0 0 1200 460" role="img" aria-label="旋律樂譜"></svg>
+        <div id="scoreEmpty" class="score-empty">辨識完成後，這裡會顯示旋律樂譜。</div>
+      </div>
+      <p class="score-note">依辨識結果生成參考譜，以 4/4 拍與十六分音符整理節奏，並非原曲正式曲譜。BPM 只影響記譜；五線譜以實際音高顯示，簡譜主音可調，不改變播放音高。</p>
+      <div class="pager"><button id="prevPage" type="button" disabled>上一頁</button><span id="pageLabel">尚無樂譜</span><button id="nextPage" type="button" disabled>下一頁</button></div>
+    </section>
+  </main>
+
+  <footer><strong>VoiceKeys</strong><span>聲音與指尖之間</span><small>人聲分離 · 旋律追蹤 · 鋼琴合成</small></footer>
+
+  <audio id="originalAudio" preload="metadata"></audio>
+  <audio id="vocalAudio" preload="metadata"></audio>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

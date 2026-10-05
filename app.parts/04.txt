@@ -1,0 +1,60 @@
+ath.floor((t0 + dur) * sr));
+    for (let i=start;i<end;i++) {
+      const t=(i-start)/sr;
+      const a=Math.min(1,t/.025)*Math.min(1,(dur-t)/.12);
+      const vibrato = Math.sin(2*Math.PI*5*t)*.002;
+      data[i] += a * (.48*Math.sin(2*Math.PI*f*(1+vibrato)*t)+.16*Math.sin(2*Math.PI*f*2*t)+.07*Math.sin(2*Math.PI*f*3*t));
+    }
+    t0 += dur + gap;
+  }
+  const blob = encodeMonoWav(data, sr);
+  return new File([blob], 'VoiceKeys-Demo.wav', {type:'audio/wav'});
+}
+
+function encodeMonoWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const str = (o,s) => { for(let i=0;i<s.length;i++) view.setUint8(o+i,s.charCodeAt(i)); };
+  str(0,'RIFF'); view.setUint32(4,36+samples.length*2,true); str(8,'WAVE'); str(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true); str(36,'data'); view.setUint32(40,samples.length*2,true);
+  let o=44; for (let i=0;i<samples.length;i++,o+=2) { const s=clamp(samples[i],-1,1); view.setInt16(o, s<0?s*0x8000:s*0x7fff, true); }
+  return new Blob([buffer], {type:'audio/wav'});
+}
+
+els.analyzeBtn.addEventListener('click', analyze);
+els.cancelBtn.addEventListener('click', () => {
+  state.abortRequested = true;
+  els.cancelBtn.disabled = true;
+  setStatus('已要求取消；目前步驟結束後停止。');
+});
+
+async function analyze() {
+  if (!state.file || !state.originalBuffer || state.analyzing) return;
+  pausePlayer();
+  state.abortRequested = false;
+  els.cancelBtn.disabled = false;
+  state.analysisStarted = performance.now();
+  state.warning = '';
+  setAnalyzing(true);
+  resetPipeline();
+  try {
+    let targetBuffer = state.originalBuffer;
+    if (els.contentSelect.value === 'song') {
+      setStage('separate', '準備人聲分離模型…', 2);
+      try {
+        const separated = await separateVocals(state.fileUrl);
+        checkAbort();
+        targetBuffer = separated.buffer;
+        state.vocalBuffer = separated.buffer;
+        cleanupObjectUrl('vocalUrl');
+        state.vocalUrl = separated.url;
+        els.vocalAudio.src = state.vocalUrl;
+      } catch (err) {
+        if (String(err?.message) === '__ABORT__') throw err;
+        console.warn('Vocal separation failed, using fallback:', err);
+        state.warning = '人聲模型無法載入，已改用本機中央聲道／直接辨識備援。';
+        setStatus(`${state.warning} 正在繼續…`, 20);
+        targetBuffer = createCenterVocalBuffer(state.originalBuffer);
+        state.vocalBuffer = targetBuffer;
+        cleanupObjectUrl('vocalUrl');

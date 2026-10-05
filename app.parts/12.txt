@@ -1,0 +1,21 @@
+.textContent=`${formatTime(t)} / ${formatTime(state.duration)}`;drawFalling(t);
+  const current=state.notes.find(n=>t>=n.start&&t<=n.start+n.duration);
+  els.currentNote.textContent=current?midiName(current.midi):'—';drawPiano(current?.midi ?? null);
+  if(els.followScore.checked && state.notes.length){const p=scorePageForTime(t);if(p!==state.scorePage){state.scorePage=p;renderScore();}}
+}
+
+els.midiBtn.addEventListener('click',()=>downloadMidi());
+function vlq(n){const bytes=[n&0x7f];while((n>>=7))bytes.unshift((n&0x7f)|0x80);return bytes;}
+function downloadMidi(){
+  if(!state.notes.length)return;const bpm=clamp(Number(els.bpm.value)||90,40,220),ppq=480;const events=[];
+  const mpqn=Math.round(60000000/bpm);events.push({tick:0,bytes:[0xff,0x51,0x03,(mpqn>>16)&255,(mpqn>>8)&255,mpqn&255],order:0});events.push({tick:0,bytes:[0xc0,0x00],order:1});
+  for(const n of state.notes){const on=Math.max(0,Math.round(n.start*bpm/60*ppq));const off=Math.max(on+1,Math.round((n.start+n.duration)*bpm/60*ppq));events.push({tick:on,bytes:[0x90,clamp(Math.round(n.midi),0,127),Math.round(55+45*n.confidence)],order:2});events.push({tick:off,bytes:[0x80,clamp(Math.round(n.midi),0,127),0],order:1});}
+  events.sort((a,b)=>a.tick-b.tick||a.order-b.order);let last=0,track=[];for(const e of events){track.push(...vlq(e.tick-last),...e.bytes);last=e.tick;}track.push(0,0xff,0x2f,0);
+  const u32=n=>[(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255],u16=n=>[(n>>>8)&255,n&255];const bytes=[...new TextEncoder().encode('MThd'),...u32(6),...u16(0),...u16(1),...u16(ppq),...new TextEncoder().encode('MTrk'),...u32(track.length),...track];
+  const blob=new Blob([new Uint8Array(bytes)],{type:'audio/midi'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${(state.file?.name||'melody').replace(/\.[^.]+$/,'')}-melody.mid`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+function computeScorePages(){const bpm=clamp(Number(els.bpm.value)||90,40,220),beatsPerPage=16;const end=state.notes.length?Math.max(...state.notes.map(n=>(n.start+n.duration)*bpm/60)):0;state.scorePages=Math.max(1,Math.ceil(end/beatsPerPage));state.scorePage=clamp(state.scorePage,0,state.scorePages-1);}
+function scorePageForTime(t){const bpm=clamp(Number(els.bpm.value)||90,40,220);return clamp(Math.floor((t*bpm/60)/16),0,Math.max(0,state.scorePages-1));}
+els.bpm.addEventListener('change',()=>{computeScorePages();renderScore();});els.keySelect.addEventListener('change',renderScore);
+document.querySelectorAll('.score-mode').forEach(b=>b.addEventListener('click',()=>{state.scoreMode=b.dataset.s

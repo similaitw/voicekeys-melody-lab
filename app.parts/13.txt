@@ -1,0 +1,18 @@
+core;document.querySelectorAll('.score-mode').forEach(x=>x.classList.toggle('active',x===b));renderScore();}));
+els.prevPage.addEventListener('click',()=>{state.scorePage=Math.max(0,state.scorePage-1);renderScore();});els.nextPage.addEventListener('click',()=>{state.scorePage=Math.min(state.scorePages-1,state.scorePage+1);renderScore();});
+
+function renderScore(){
+  const svg=els.scoreSvg;svg.innerHTML='';if(!state.notes.length){els.scoreEmpty.style.display='grid';return;}els.scoreEmpty.style.display='none';
+  computeScorePages();els.pageLabel.textContent=`${state.scorePage+1} / ${state.scorePages}`;els.prevPage.disabled=state.scorePage<=0;els.nextPage.disabled=state.scorePage>=state.scorePages-1;
+  if(state.scoreMode==='staff')renderStaff(svg);else renderNumberScore(svg);
+  svg.querySelectorAll('[data-time]').forEach(g=>g.addEventListener('click',()=>{seekTo(Number(g.dataset.time));if(els.followScore.checked)updatePlayerVisuals(Number(g.dataset.time));}));
+}
+function svgEl(tag,attrs={},text=''){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
+function renderStaff(svg){
+  const bpm=clamp(Number(els.bpm.value)||90,40,220),startBeat=state.scorePage*16,endBeat=startBeat+16,left=90,right=1150,top=120,lineGap=16,bottom=top+lineGap*4;
+  svg.appendChild(svgEl('text',{x:28,y:184,'font-size':64,'font-family':'serif',fill:'#171713'},'𝄞'));
+  for(let i=0;i<5;i++)svg.appendChild(svgEl('line',{x1:left,y1:top+i*lineGap,x2:right,y2:top+i*lineGap,stroke:'#7a756b','stroke-width':1}));
+  for(let b=0;b<=16;b+=4){const x=left+(b/16)*(right-left);svg.appendChild(svgEl('line',{x1:x,y1:top-8,x2:x,y2:bottom+8,stroke:b===0||b===16?'#37342f':'#b8b1a5','stroke-width':b==0||b===16??2:1}));svg.appendChild(svgEl('text',{x:x+5,y:top-16,'font-size':11,fill:'#9b9489'},`${state.scorePage*4+b/4+1}`));}
+  const pageNotes=state.notes.filter(n=>{const beat=n.start*bpm/60;return beat>=startBeat&&beat<endBeat;});
+  for(const n of pageNotes){const beat=n.start*bpm/60-startBeat,x=left+(beat/16)*(right-left),y=staffY(n.midi,top,lineGap),g=svgEl('g',{'data-time':n.start,style:'cursor:pointer'});g.appendChild(svgEl('ellipse',{cx:x,cy:y,rx:9,ry:6,fill:`rgba(23,23,19,${.45+.55*n.confidence})`,transform:`rotate(-18 ${x} ${y})`}));const stemUp=y>top+lineGap*2;g.appendChild(svgEl('line',{x1:x+(stemUp?8:-8),y1:y,x2:x+(stemUp?8:-8),y2:y+(stemUp?-42:42),stroke:'#171713','stroke-width':2}));
+    const pc=((Math.round(n.midi)%12)+12)%12;if([1,3,6,8,10].includes(pc))g.appendChild(svgEl('t

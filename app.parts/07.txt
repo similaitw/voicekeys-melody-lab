@@ -1,0 +1,77 @@
+=v; rms+=v*v;
+    }
+    rms=Math.sqrt(rms/frameSize);
+    const time = (start + frameSize/2) / targetRate;
+    if (rms < gate) { frames.push({time,pitch:null,midi:null,clarity:0,rms}); continue; }
+    const det = autoCorrPitch(windowed, targetRate, minLag, maxLag);
+    if (!det || det.clarity < .58 || det.freq < minHz || det.freq > maxHz) {
+      frames.push({time,pitch:null,midi:null,clarity:det?.clarity || 0,rms});
+    } else {
+      frames.push({time,pitch:det.freq,midi:freqToMidi(det.freq),clarity:det.clarity,rms});
+    }
+  }
+  setStage('pitch', '音高追蹤完成。', 100);
+  return {frames, hopSeconds};
+}
+
+function mixToMono(buffer) {
+  const len = buffer.length;
+  const out = new Float32Array(len);
+  for (let c=0;c<buffer.numberOfChannels;c++) {
+    const ch=buffer.getChannelData(c); for(let i=0;i<len;i++) out[i]+=ch[i]/buffer.numberOfChannels;
+  }
+  return out;
+}
+
+function downsample(input, sourceRate, targetRate) {
+  if (sourceRate <= targetRate * 1.05) return input.slice();
+  const ratio = sourceRate / targetRate;
+  const out = new Float32Array(Math.floor(input.length / ratio));
+  for (let i=0;i<out.length;i++) {
+    const a=Math.floor(i*ratio), b=Math.min(input.length,Math.floor((i+1)*ratio));
+    let s=0; for(let j=a;j<b;j++) s+=input[j]; out[i]=s/Math.max(1,b-a);
+  }
+  return out;
+}
+
+function autoCorrPitch(x, sr, minLag, maxLag) {
+  // YIN-style cumulative mean normalized difference. Choosing the first
+  // convincing valley avoids the octave-down errors common in plain autocorrelation.
+  const diff = new Float32Array(maxLag + 2);
+  const cmnd = new Float32Array(maxLag + 2);
+  cmnd[0] = 1;
+  for (let tau = 1; tau <= maxLag + 1; tau++) {
+    let d = 0;
+    const n = x.length - tau;
+    for (let i = 0; i < n; i += 2) {
+      const delta = x[i] - x[i + tau];
+      d += delta * delta;
+    }
+    diff[tau] = d;
+  }
+  let running = 0;
+  for (let tau = 1; tau <= maxLag + 1; tau++) {
+    running += diff[tau];
+    cmnd[tau] = running > 1e-12 ? (diff[tau] * tau) / running : 1;
+  }
+
+  let bestTau = 0;
+  const threshold = 0.18;
+  for (let tau = Math.max(2, minLag); tau <= maxLag; tau++) {
+    if (cmnd[tau] < threshold) {
+      while (tau + 1 <= maxLag && cmnd[tau + 1] < cmnd[tau]) tau++;
+      bestTau = tau;
+      break;
+    }
+  }
+  if (!bestTau) {
+    let best = 1;
+    for (let tau = Math.max(2, minLag); tau <= maxLag; tau++) {
+      if (cmnd[tau] < best) { best = cmnd[tau]; bestTau = tau; }
+    }
+    if (!bestTau || best > 0.42) return null;
+  }
+
+  let tau = bestTau;
+  if (bestTau > 1 && bestTau < maxLag) {
+    const y1 = cmnd[bestTau - 1], y2 = cmnd[bestTau], y3 =

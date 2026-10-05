@@ -1,0 +1,64 @@
+ cmnd[bestTau + 1];
+    const den = y1 - 2 * y2 + y3;
+    if (Math.abs(den) > 1e-8) tau += 0.5 * (y1 - y3) / den;
+  }
+  const clarity = clamp(1 - cmnd[bestTau], 0, 1);
+  return { freq: sr / tau, clarity };
+}
+
+function segmentNotes(frames, hopSeconds) {
+  if (!frames.length) return [];
+  const smooth = frames.map((f,i) => {
+    if (f.midi == null) return null;
+    const vals=[];
+    for(let j=Math.max(0,i-2);j<=Math.min(frames.length-1,i+2);j++) if(frames[j].midi!=null) vals.push(frames[j].midi);
+    vals.sort((a,b)=>a-b);
+    return vals.length ? vals[Math.floor(vals.length/2)] : null;
+  });
+  const q=smooth.map(m=>m==null?null:Math.round(m));
+  for(let i=1;i<q.length-1;i++) if(q[i-1]!=null && q[i+1]===q[i-1] && q[i]!==q[i-1]) q[i]=q[i-1];
+  for(let i=1;i<q.length;i++) if(q[i]!=null && q[i-1]!=null && Math.abs(q[i]-q[i-1])===1 && Math.abs((smooth[i]||q[i])-q[i-1])<.72) q[i]=q[i-1];
+
+  const notes=[]; let cur=null; let gap=0;
+  const close=(endTime)=>{
+    if(!cur)return;
+    cur.duration=Math.max(hopSeconds, endTime-cur.start);
+    cur.confidence=cur.confSum/Math.max(1,cur.frames);
+    delete cur.confSum; delete cur.frames;
+    if(cur.duration>=.075) notes.push(cur);
+    cur=null; gap=0;
+  };
+  for(let i=0;i<frames.length;i++) {
+    const f=frames[i], m=q[i];
+    if(m==null) {
+      if(cur){gap++; if(gap>=2) close(f.time-hopSeconds);}
+      continue;
+    }
+    if(!cur) {cur={midi:m,start:Math.max(0,f.time-hopSeconds/2),duration:0,confidence:0,confSum:f.clarity,frames:1};gap=0;continue;}
+    if(m===cur.midi || (Math.abs(m-cur.midi)<=1 && f.clarity<.72)) {cur.confSum+=f.clarity;cur.frames++;gap=0;}
+    else {close(f.time-hopSeconds/2);cur={midi:m,start:Math.max(0,f.time-hopSeconds/2),duration:0,confidence:0,confSum:f.clarity,frames:1};}
+  }
+  close((frames.at(-1)?.time || 0)+hopSeconds);
+  return notes;
+}
+
+function cleanupNotes(notes) {
+  const out=[];
+  for (const n of notes) {
+    if (n.duration < .09 && n.confidence < .74) continue;
+    const prev=out.at(-1);
+    if(prev && prev.midi===n.midi && n.start-(prev.start+prev.duration)<.11) {
+      const end=n.start+n.duration; prev.duration=end-prev.start; prev.confidence=(prev.confidence+n.confidence)/2;
+    } else out.push({...n});
+  }
+  return out;
+}
+
+function finalizeAnalysis() {
+  const notes=state.notes;
+  const elapsed=(performance.now()-state.analysisStarted)/1000;
+  els.noteCount.textContent=String(notes.length);
+  if(notes.length){
+    const lo=Math.min(...notes.map(n=>n.midi)), hi=Math.max(...notes.map(n=>n.midi));
+    els.noteRange.textContent=`${midiName(lo)} – ${midiName(hi)}`;
+    els.confiden

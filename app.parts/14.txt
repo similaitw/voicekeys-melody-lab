@@ -1,0 +1,16 @@
+ext',{x:x-20,y:y+5,'font-size':16,fill:'#171713'},'♯'));
+    if(y>bottom+1){for(let ly=bottom+lineGap;ly<=y+3;ly+=lineGap)g.appendChild(svgEl('line',{x1:x-13,y1:ly,x2:x+13,y2:ly,stroke:'#7a756b'}));}
+    if(y<top-1){for(let ly=top-lineGap;ly>=y-3;ly-=lineGap)g.appendChild(svgEl('line',{x1:x-13,y1:ly,x2:x+13,y2:ly,stroke:'#7a756b'}));}
+    g.appendChild(svgEl('title',{},`${midiName(n.midi)} · ${n.start.toFixed(2)}s`));svg.appendChild(g);
+  }
+  svg.appendChild(svgEl('text',{x:90,y:285,'font-size':12,fill:'#857f75'},`第 ${state.scorePage+1} 頁 · 4/4 · ${bpm} BPM · 點擊音符可定位播放`));
+}
+function staffY(midi,top,lineGap){const n=Math.round(midi),pc=((n%12)+12)%12,oct=Math.floor(n/12)-1;const pcToLetter={0:0,1:0,2:1,3:1,4:2,5:3,6:3,7:4,8:4,9:5,10:5,11:6};const dia=oct*7+pcToLetter[pc],e4=4*7+2,bottom=top+lineGap*4;return bottom-(dia-e4)*(lineGap/2);}
+function renderNumberScore(svg){
+  const bpm=clamp(Number(els.bpm.value)||90,40,220),startBeat=state.scorePage*16,endBeat=startBeat+16,left=65,right=1140,rootPc={C:0,D:2,E:4,F:5,G:7,A:9,B:11}[els.keySelect.value]||0;const rowsY=[150,280];
+  for(let row=0;row<2;row++){const rowStart=startBeat+row*8;svg.appendChild(svgEl('line',{x1:left,y1:rowsY[row]+38,x2:right,y2:rowsY[row]+38,stroke:'#d5cec1'}));for(let b=0;b<=8;b+=4){const x=left+(b/8)*(right-left);svg.appendChild(svgEl('line',{x1:x,y1:rowsY[row]-40,x2:x,y2:rowsY[row]+52,stroke:'#c8c0b3'}));}}
+  const scale=[0,2,4,5,7,9,11];
+  for(const n of state.notes){const absBeat=n.start*bpm/60;if(absBeat<startBeat||absBeat>=endBeat)continue;const rel=absBeat-startBeat,row=Math.floor(rel/8),b=rel-row*8,x=left+(b/8)*(right-left),y=rowsY[row],pitch=Math.round(n.midi),relPc=(pitch-rootPc+120)%12;let degree=1,acc='';let best=99;for(let i=0;i<7;i++){let d=relPc-scale[i];if(d>6)d-=12;if(d<-6)d+=12;if(Math.abs(d)<Math.abs(best)){best=d;degree=i+1;}}if(best===1)acc='♯';else if(best===-1)acc='♭';
+    const rootMidi=60+rootPc;const octave=Math.floor((pitch-rootMidi)/12);const g=svgEl('g',{'data-time':n.start,style:'cursor:pointer'});g.appendChild(svgEl('text',{x:x,y:y,'font-size':28,'font-weight':700,'text-anchor':'middle',fill:`rgba(23,23,19,${.45+.55*n.confidence})`},`${acc}${degree}`));
+    if(octave>0)for(let d=0;d<Math.min(2,octave);d++)g.appendChild(svgEl('circle',{cx:x,cy:y-25-d*8,r:2.5,fill:'#171713'}));if(octave<0)for(let d=0;d<Math.min(2,-octave);d++)g.appendChild(svgEl('circle',{cx:x,cy:y+22+d*8,r:2.5,fill:'#171713'}));
+    const beatDur=n.duration*bpm/60;if(beatDur<.75)g.appendChild(svgEl('line',{x1:x-10,y1:y+8,x2:x+10,y2:y+8,stroke:'#171713','stroke-width':2}));if(beatDur>=1.5)g

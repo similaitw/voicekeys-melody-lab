@@ -1,0 +1,71 @@
+fer());
+  const buffer = await getAudioContext().decodeAudioData(ab.slice(0));
+  setStage('separate', '人聲分離完成。', 100);
+  return {url:vocalUrl, buffer};
+}
+
+function createCenterVocalBuffer(buffer) {
+  const ctx = getAudioContext();
+  const out = ctx.createBuffer(1, buffer.length, buffer.sampleRate);
+  const dst = out.getChannelData(0);
+  const l = buffer.getChannelData(0);
+  const r = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : l;
+  let prev = 0;
+  for (let i=0;i<buffer.length;i++) {
+    const mid = (l[i] + r[i]) * .5;
+    const hp = mid - prev * .94;
+    prev = mid;
+    dst[i] = clamp(mid * .82 + hp * .18, -1, 1);
+  }
+  return out;
+}
+
+function audioBufferToWavBlob(buffer) {
+  const channels = buffer.numberOfChannels;
+  const length = buffer.length;
+  const arr = new Float32Array(length);
+  for (let c=0;c<channels;c++) {
+    const d=buffer.getChannelData(c); for(let i=0;i<length;i++) arr[i]+=d[i]/channels;
+  }
+  return encodeMonoWav(arr, buffer.sampleRate);
+}
+
+async function trackPitch(buffer) {
+  setStage('gate', '建立單聲道分析訊號…', 10);
+  const mono = mixToMono(buffer);
+  const [minHz, maxHz] = rangeMap[els.rangeSelect.value] || rangeMap.auto;
+  const targetRate = maxHz > 900 ? 8000 : 4000;
+  const signal = downsample(mono, buffer.sampleRate, targetRate);
+  checkAbort();
+
+  const frameSize = targetRate === 8000 ? 768 : 384;
+  const hopSize = Math.round(targetRate * 0.032);
+  const hopSeconds = hopSize / targetRate;
+  const minLag = Math.max(2, Math.floor(targetRate / Math.min(maxHz, targetRate/2.2)));
+  const maxLag = Math.min(frameSize - 8, Math.ceil(targetRate / Math.max(minHz, 55)));
+  const frameCount = Math.max(0, Math.floor((signal.length - frameSize) / hopSize) + 1);
+
+  let sumSq=0; for(let i=0;i<signal.length;i+=4) sumSq += signal[i]*signal[i];
+  const globalRms = Math.sqrt(sumSq / Math.ceil(signal.length/4));
+  const gate = Math.max(0.006, globalRms * 0.16);
+  setStage('gate', `有效聲音門檻 ${gate.toFixed(3)}，開始追蹤音高…`, 100);
+  await sleep(20);
+  setStage('pitch', '追蹤基頻與音高穩定度…', 0);
+
+  const frames = [];
+  const windowed = new Float32Array(frameSize);
+  for (let fi=0; fi<frameCount; fi++) {
+    if (fi % 24 === 0) {
+      checkAbort();
+      setStage('pitch', `追蹤音高… ${fi}/${frameCount}`, frameCount ? fi/frameCount*100 : 0);
+      await sleep(0);
+    }
+    const start = fi * hopSize;
+    let mean=0;
+    for(let i=0;i<frameSize;i++) mean += signal[start+i];
+    mean /= frameSize;
+    let rms=0;
+    for(let i=0;i<frameSize;i++) {
+      const w = .5 - .5 * Math.cos(2*Math.PI*i/(frameSize-1));
+      const v=(signal[start+i]-mean)*w;
+      windowed[i]

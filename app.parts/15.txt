@@ -1,0 +1,9 @@
+.appendChild(svgEl('text',{x:x+18,y:y,'font-size':24,fill:'#171713'},'—'));g.appendChild(svgEl('title',{},`${midiName(n.midi)} · ${n.start.toFixed(2)}s`));svg.appendChild(g);
+  }
+  svg.appendChild(svgEl('text',{x:65,y:405,'font-size':12,fill:'#857f75'},`簡譜 1 = ${els.keySelect.value} · ${bpm} BPM · 上下點代表八度，底線代表較短音值`));
+}
+
+window.addEventListener('resize',()=>{drawPiano();drawFalling(Number(els.seek.value)||0);});
+window.addEventListener('beforeunload',()=>{cleanupObjectUrl('fileUrl');cleanupObjectUrl('vocalUrl');});
+
+drawPiano();drawFalling(0);updateAnalyzeButton();configureAudioMode();

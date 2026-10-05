@@ -1,0 +1,72 @@
+
+  if (pct != null) els.progressBar.style.width = `${clamp(pct, 0, 100)}%`;
+}
+function resetPipeline() {
+  document.querySelectorAll('.pipeline [data-stage]').forEach(el => el.classList.remove('active','done'));
+}
+function setStage(stage, text, pct = 0) {
+  const order = ['separate','gate','pitch','smooth','ready'];
+  const idx = order.indexOf(stage);
+  document.querySelectorAll('.pipeline [data-stage]').forEach(el => {
+    const i = order.indexOf(el.dataset.stage);
+    el.classList.toggle('done', i < idx);
+    el.classList.toggle('active', i === idx);
+  });
+  setStatus(text, pct);
+}
+function finishPipeline() {
+  document.querySelectorAll('.pipeline [data-stage]').forEach(el => { el.classList.remove('active'); el.classList.add('done'); });
+  els.progressBar.style.width = '100%';
+}
+function setAnalyzing(v) {
+  state.analyzing = v;
+  els.analyzeBtn.disabled = v || !state.file;
+  els.cancelBtn.classList.toggle('hidden', !v);
+  els.fileInput.disabled = v;
+  els.sampleBtn.disabled = v;
+}
+function checkAbort() {
+  if (state.abortRequested) throw new Error('__ABORT__');
+}
+
+function cleanupObjectUrl(key) {
+  if (state[key] && String(state[key]).startsWith('blob:')) URL.revokeObjectURL(state[key]);
+  state[key] = null;
+}
+
+async function decodeFile(file) {
+  const ctx = getAudioContext();
+  const arr = await file.arrayBuffer();
+  return await ctx.decodeAudioData(arr.slice(0));
+}
+function getAudioContext() {
+  if (!state.audioCtx) state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return state.audioCtx;
+}
+
+async function acceptFile(file, {isSample = false} = {}) {
+  if (!file) return;
+  const extOk = /\.(mp3|wav|m4a)$/i.test(file.name || '') || /^audio\//.test(file.type || '');
+  if (!extOk) { alert('請選擇 MP3、WAV 或 M4A 音訊檔。'); return; }
+  if (file.size > 50 * 1024 * 1024) { alert('檔案超過 50 MB，請換一個較小的音訊檔。'); return; }
+
+  setStatus('正在讀取音訊…', 3);
+  try {
+    const buffer = await decodeFile(file);
+    if (buffer.duration > 600.5) { alert('音訊超過 10 分鐘，請裁切後再試。'); return; }
+    cleanupObjectUrl('fileUrl');
+    cleanupObjectUrl('vocalUrl');
+    state.file = file;
+    state.fileUrl = URL.createObjectURL(file);
+    state.originalBuffer = buffer;
+    state.vocalBuffer = null;
+    state.duration = buffer.duration;
+    state.notes = [];
+    state.pitchFrames = [];
+    state.warning = '';
+
+    els.originalAudio.src = state.fileUrl;
+    els.vocalAudio.removeAttribute('src');
+    els.dropTitle.textContent = file.name || '範例旋律';
+    els.dropHint.textContent = `${formatTime(buffer.duration)} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
+    els.analyzeBtn.di

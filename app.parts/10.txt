@@ -1,0 +1,35 @@
+e.filter(x=>x<m).at(-1);const idx=white.indexOf(prevWhite);layout.push({midi:m,x:(idx+1)*ww-ww*.31,width:ww*.62,height:h*.62,color:'black'});
+  }
+  state.pianoLayout=layout;
+}
+function drawPiano(activeMidi=null) {
+  buildPianoLayout(); const c=els.pianoCanvas,ctx=c.getContext('2d'),w=c.width,h=c.height;
+  ctx.fillStyle='#eeeae0';ctx.fillRect(0,0,w,h);
+  for(const k of state.pianoLayout.filter(k=>k.color==='white')){ctx.fillStyle=Math.round(activeMidi)===k.midi?'#dfbd7f':'#f5f2ea';ctx.fillRect(k.x,k.y||0,k.width,k.height);ctx.strokeStyle='#292820';ctx.strokeRect(k.x,0,k.width,k.height);}
+  for(const k of state.pianoLayout.filter(k=>k.color==='black')){ctx.fillStyle=Math.round(activeMidi)===k.midi?'#b48b4e':'#171713';ctx.fillRect(k.x,0,k.width,k.height);}
+}
+els.pianoCanvas.addEventListener('pointerdown', e=>{
+  const r=els.pianoCanvas.getBoundingClientRect(),sx=els.pianoCanvas.width/r.width,sy=els.pianoCanvas.height/r.height,x=(e.clientX-r.left)*sx,y=(e.clientY-r.top)*sy;
+  let key=state.pianoLayout.filter(k=>k.color==='black').find(k=>x>=k.x&&x<=k.x+k.width&&y<=k.height);
+  if(!key)key=state.pianoLayout.filter(k=>k.color==='white').find(k=>x>=k.x&&x<=k.x+k.width);
+  if(key){playSynth(key.midi,.55,Number(els.volume.value));drawPiano(key.midi);setTimeout(()=>drawPiano(),180);}
+});
+
+function playSynth(midi, duration=.45, volume=.7) {
+  const ctx=getAudioContext(); if(ctx.state==='suspended')ctx.resume();
+  const now=ctx.currentTime; const gain=ctx.createGain(); const master=ctx.createGain();
+  const o1=ctx.createOscillator(),o2=ctx.createOscillator();
+  o1.type='triangle';o2.type='sine';o1.frequency.value=midiToFreq(midi);o2.frequency.value=midiToFreq(midi)*2;
+  master.gain.value=clamp(volume,0,1)*.42;gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.75,now+.012);gain.gain.exponentialRampToValueAtTime(.18,now+Math.min(.18,duration*.35));gain.gain.exponentialRampToValueAtTime(.0001,now+Math.max(.08,duration));
+  o1.connect(gain);o2.connect(gain);gain.connect(master);master.connect(ctx.destination);o2.detune.value=3;
+  o1.start(now);o2.start(now);o1.stop(now+duration+.05);o2.stop(now+duration+.05);
+  const node={o1,o2};state.activeSynth.add(node);o1.onended=()=>state.activeSynth.delete(node);
+}
+function stopSynths(){for(const n of state.activeSynth){try{n.o1.stop();n.o2.stop();}catch{}}state.activeSynth.clear();}
+
+function configureAudioMode() {
+  const v=Number(els.volume.value), mode=state.mode;
+  els.originalAudio.volume=(mode==='original'||mode==='ensemble')?v:0;
+  els.vocalAudio.volume=mode==='vocal'?v:0;
+}
+function setMode(mode)
