@@ -710,4 +710,4 @@ function renderNumberScore(svg){
 window.addEventListener('resize',()=>{drawPiano();drawFalling(Number(els.seek.value)||0);});
 window.addEventListener('beforeunload',()=>{cleanupObjectUrl('fileUrl');cleanupObjectUrl('vocalUrl');});
 
-drawPiano();drawFalling(0);updateAnalyzeButton();configureAudioMode();
+drawPiano();drawFalling(0);updateAnalyzeButton();configureAudioMode();window.__VOICEKEYS_READY__=true;setStatus('程式已就緒，請選擇歌曲或使用範例旋律。',0);
